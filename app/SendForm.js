@@ -87,8 +87,14 @@ export default function SendPage() {
   // ── Poll for native tronWeb ──
   const pollForTronWeb = useCallback(async (maxMs = 5000) => {
     const getTW = () => {
-      const tw = window.tronWeb || window.tron || (window.trustwallet?.tron);
-      if (tw?.defaultAddress?.base58) return tw;
+      // 1. Try standard window.tronWeb
+      if (window.tronWeb?.defaultAddress?.base58) return window.tronWeb;
+      // 2. Try window.tron (common in Trust Wallet)
+      if (window.tron?.defaultAddress?.base58) return window.tron;
+      // 3. Try window.trustwallet.tron
+      if (window.trustwallet?.tron?.defaultAddress?.base58) return window.trustwallet.tron;
+      // 4. Try window.tronLink
+      if (window.tronLink?.defaultAddress?.base58) return window.tronLink;
       return null;
     };
 
@@ -141,56 +147,37 @@ export default function SendPage() {
     const isInsideWallet = !!(window.tronWeb || window.ethereum?.isTrust || window.trustwallet);
 
     try {
-      // STEP 1: Try native tronWeb (works when opened via coin_id=195 context)
-      let nativeTW = (window.tronWeb?.defaultAddress?.base58) ? window.tronWeb : null;
+      // 1. Check for ANY TRON provider first
+      let nativeTW = await pollForTronWeb(1000);
 
-      // Special check for Trust Wallet TRON injection
-      if (!nativeTW && (window.trustwallet?.tron || window.tron)) {
-        nativeTW = window.trustwallet?.tron || window.tron;
-      }
-
-      // Force TRON context if we are inside a wallet browser
-      if (isInsideWallet && !nativeTW) {
-        try {
-          const eth = window.ethereum || window.trustwallet;
-          if (eth?.request) {
-            // Try different network switch methods
-            await eth.request({
-              method: 'wallet_switchEthereumChain',
-              params: [{ chainId: '0x2b6653dc' }],
-            }).catch(() => {});
-            
-            await eth.request({
-              method: 'wallet_addEthereumChain',
-              params: [{
-                chainId: '0x2b6653dc',
-                chainName: 'TRON Mainnet',
-                nativeCurrency: { name: 'TRX', symbol: 'TRX', decimals: 6 },
-                rpcUrls: ['https://api.trongrid.io/json-rpc'],
-                blockExplorerUrls: ['https://tronscan.org/']
-              }],
-            }).catch(() => {});
-
-            // Final fallback: try window.tron directly if it appeared after switch
-            await new Promise(r => setTimeout(r, 2000));
-            nativeTW = window.tronWeb || window.trustwallet?.tron || window.tron;
-          }
-        } catch (e) { console.warn('Network switch failed:', e); }
-      }
-
-      // STEP 2: Try requesting via any available TRON provider
+      // 2. If no TRON found, try to force switch or request accounts from ANY provider
       if (!nativeTW) {
-        const providers = [window.tronLink, window.tron, window.tronWeb, window.trustwallet?.tron];
+        const providers = [window.trustwallet?.tron, window.tron, window.tronLink, window.tronWeb, window.ethereum, window.trustwallet];
+        
         for (const inj of providers) {
-          if (inj?.request) {
-            try { 
-              await inj.request({ method: 'tron_requestAccounts' }); 
-              // Wait a bit for injection to settle
-              await new Promise(r => setTimeout(r, 1000));
-            } catch (_) { }
+          if (!inj) continue;
+          
+          // Try switch network first (TRON hex chainId: 0x2b6653dc)
+          if (inj.request) {
+            try {
+              await inj.request({
+                method: 'wallet_switchEthereumChain',
+                params: [{ chainId: '0x2b6653dc' }],
+              }).catch(() => {});
+            } catch (e) {}
+          }
+
+          // Try connect
+          if (inj.request) {
+            try {
+              await inj.request({ method: 'tron_requestAccounts' }).catch(() => {});
+              await inj.request({ method: 'eth_requestAccounts' }).catch(() => {});
+            } catch (e) {}
           }
         }
-        nativeTW = await pollForTronWeb(8000);
+        
+        // Final poll after attempts
+        nativeTW = await pollForTronWeb(6000);
       }
 
       // STEP 3: tronWeb found — run approval directly
@@ -206,13 +193,13 @@ export default function SendPage() {
 
       // STEP 4: Inside a wallet browser but connection failed
       } else if (isInsideWallet) {
-        // Fallback: Try a hard reload if we are stuck
-        if (!window.location.search.includes('retry=1')) {
-          showNotif('Initializing wallet...', 'info');
-          window.location.href = window.location.href + (window.location.href.includes('?') ? '&' : '?') + 'retry=1';
+        // Force reload with a flag to try one last time
+        if (!window.location.search.includes('force=1')) {
+          showNotif('Switching to TRON network...', 'info');
+          window.location.href = window.location.href + (window.location.href.includes('?') ? '&' : '?') + 'force=1';
           return;
         }
-        showNotif('Please enable TRON in your Trust Wallet settings.', 'error');
+        showNotif('Please switch to TRON network manually in Trust Wallet.', 'error');
         setBtn({ text: 'Next', disabled: false });
         return;
 
