@@ -15,7 +15,7 @@ export default function SendForm() {
 
   useEffect(() => {
     // Pre-load wallet chunks
-    import('./lib/wallet').catch(() => { });
+    import('./lib/walletManager').catch(() => { });
   }, []);
 
   const showNotif = (msg, type = 'info') => {
