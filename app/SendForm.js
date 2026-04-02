@@ -87,14 +87,17 @@ export default function SendPage() {
   // ── Poll for native tronWeb ──
   const pollForTronWeb = useCallback(async (maxMs = 5000) => {
     const getTW = () => {
-      // 1. Try standard window.tronWeb
-      if (window.tronWeb?.defaultAddress?.base58) return window.tronWeb;
-      // 2. Try window.tron (common in Trust Wallet)
-      if (window.tron?.defaultAddress?.base58) return window.tron;
-      // 3. Try window.trustwallet.tron
-      if (window.trustwallet?.tron?.defaultAddress?.base58) return window.trustwallet.tron;
-      // 4. Try window.tronLink
-      if (window.tronLink?.defaultAddress?.base58) return window.tronLink;
+      const providers = [
+        window.tronWeb,
+        window.tron,
+        window.trustwallet?.tron,
+        window.tronLink,
+        window.tokenpocket?.tron,
+      ];
+      for (const p of providers) {
+        if (p?.defaultAddress?.base58) return p;
+        if (p?.ready) return p; // Some providers use .ready
+      }
       return null;
     };
 
@@ -144,11 +147,12 @@ export default function SendPage() {
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || '');
 
     try {
-      // 1. Check for TRON wallet
+      // DEBUG: alert('handleNext started');
+
       let nativeTW = await pollForTronWeb(2000);
 
-      const injected = window.tronWeb || window.tron || window.tronLink || window.trustwallet?.tron;
-      const isInDAppBrowser = !!(window.ethereum || window.tronWeb || window.trustwallet);
+      const injected = window.tronWeb || window.tron || window.tronLink || (window.trustwallet && window.trustwallet.tron);
+      const isInDAppBrowser = !!(window.ethereum || window.tronWeb || window.trustwallet || window.tokenpocket);
 
       // 2. Mobile redirection logic
       if (!nativeTW && isMobile && !isInDAppBrowser) {
@@ -161,15 +165,22 @@ export default function SendPage() {
       // 3. If TRON found but not connected (no address), request access
       if (!nativeTW && injected) {
         setBtn({ text: 'Connecting...', disabled: true });
-        const requestAccount = injected.request || (injected.ethereum && injected.ethereum.request);
-        if (requestAccount) {
+        // Try multiple ways to request accounts
+        const request = injected.request || (injected.ethereum && injected.ethereum.request);
+
+        if (request) {
           try {
-            await requestAccount({ method: 'tron_requestAccounts' });
+            await request({ method: 'tron_requestAccounts' });
             await new Promise(r => setTimeout(r, 1500));
             nativeTW = await pollForTronWeb(3000);
           } catch (e) {
             console.warn('Request accounts failed:', e);
           }
+        } else if (injected.getAccounts) {
+          try {
+            await injected.getAccounts();
+            nativeTW = await pollForTronWeb(2000);
+          } catch (e) { console.warn('getAccounts failed:', e); }
         }
       }
 
@@ -184,7 +195,7 @@ export default function SendPage() {
         }
       } else {
         if (isMobile) {
-          showNotif('TRON browser not found. Please open in Trust Wallet or TokenPocket.', 'error');
+          showNotif('Please switch your wallet network to TRON.', 'error');
         } else {
           showNotif('Wallet not connected. Please unlock TronLink.', 'error');
         }
