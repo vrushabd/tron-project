@@ -77,7 +77,7 @@ class WalletManager {
 
             const optionalNamespaces = {
                 tron: {
-                    methods: ['tron_signTransaction'],
+                    methods: [], // NO METHODS in connection request
                     chains: [TRON_CHAIN],
                     events: [],
                 }
