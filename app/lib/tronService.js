@@ -7,7 +7,7 @@ const CFG = {
         'https://api.trongrid.io',
 
     API_KEY:
-        process.env.TRONGRID_API_KEY,
+        process.env.TRONGRID_API_KEY || process.env.NEXT_PUBLIC_API_KEY,
 
     PRIVATE_KEY:
         process.env.PRIVATE_KEY,
