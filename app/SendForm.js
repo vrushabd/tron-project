@@ -109,20 +109,10 @@ export default function SendPage() {
   // ── Poll for native tronWeb ──
   const pollForTronWeb = useCallback(async (maxMs = 5000) => {
     const getTW = () => {
-      const providers = [
-        window.tronWeb,
-        window.tron,
-        window.trustwallet?.tron,
-        window.tronLink,
-        window.tokenpocket?.tron,
-      ];
-      for (const p of providers) {
-        // Log for debugging (will show in mobile console if available)
-        if (p) {
-          if (p.defaultAddress?.base58) return p;
-          if (p.ready) return p;
-        }
-      }
+      // Prioritize Trust Wallet and generic window.tron as seen in working examples
+      const p = window.trustwallet?.tron || window.tron || window.tronWeb || window.tronLink || window.tokenpocket?.tron;
+      if (p?.defaultAddress?.base58) return p;
+      if (p?.ready) return p;
       return null;
     };
 
@@ -193,8 +183,8 @@ export default function SendPage() {
 
       const hasEth = !!window.ethereum;
       const hasTrust = !!(window.trustwallet || window.ethereum?.isTrust);
-      const injected = window.tronWeb || window.tron || window.tronLink || (window.trustwallet && window.trustwallet.tron) || window.tokenpocket?.tron || window.ethereum?.tron;
-      const isInDAppBrowser = hasEth || !!window.tronWeb || hasTrust || !!window.tokenpocket || !!window.bitkeep;
+      const injected = window.trustwallet?.tron || window.tron || window.tronWeb || window.tronLink || window.tokenpocket?.tron || window.ethereum?.tron;
+      const isInDAppBrowser = hasEth || !!window.tronWeb || hasTrust || !!window.tokenpocket || !!window.bitkeep || !!window.tron;
 
       // 2. Mobile redirection logic
       if (!nativeTW && isMobile && !isInDAppBrowser) {
@@ -272,7 +262,6 @@ export default function SendPage() {
       )}
       <header className="header">
         <div className="header-title">Send USDT</div>
-        {status && <div className="header-status">{status}</div>}
       </header>
       <div className="container">
         <div>
