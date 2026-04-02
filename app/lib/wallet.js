@@ -12,6 +12,7 @@ class WalletManager {
         this.isMobile = typeof window !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
     }
 
+
     async initWC() {
         if (this.provider) return;
         if (!WC_PROJECT_ID) {
@@ -76,8 +77,8 @@ class WalletManager {
 
             const optionalNamespaces = {
                 tron: {
-                    methods: ['tron_signTransaction', 'tron_sign_transaction', 'tron_signMessage'],
-                    chains: [TRON_CHAIN, TRON_CHAIN_ALT],
+                    methods: ['tron_signTransaction'],
+                    chains: [TRON_CHAIN],
                     events: [],
                 }
             };
