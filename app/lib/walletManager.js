@@ -1,3 +1,5 @@
+'use client';
+
 import { UniversalProvider } from '@walletconnect/universal-provider';
 import { WalletConnectModal } from '@walletconnect/modal';
 
@@ -7,271 +9,135 @@ const TRON_CHAIN = 'tron:0x2b6653dc';
 class WalletManager {
 
     constructor() {
-
         this.provider = null;
-
         this.modal = null;
-
         this.isMobile =
             typeof window !== 'undefined' &&
-            /Android|iPhone|iPad|iPod/i
-                .test(navigator.userAgent);
-
+            /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
     }
 
     async initWC() {
-
         if (this.provider) return;
 
-        this.provider =
-            await UniversalProvider.init({
+        this.provider = await UniversalProvider.init({
+            projectId: PROJECT_ID,
+            metadata: {
+                name: 'Tron App',
+                description: 'TRON Wallet Connect',
+                url: typeof window !== 'undefined' ? window.location.origin : '',
+                icons: [
+                    'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/tron/info/logo.png'
+                ]
+            }
+        });
 
-                projectId: PROJECT_ID,
-
-                metadata: {
-                    name: "Tron App",
-                    description: "TRON Wallet Connect",
-                    url:
-                        typeof window !== 'undefined'
-                            ? window.location.origin
-                            : "",
-
-                    icons: [
-                        "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/tron/info/logo.png"
-                    ]
-
-                }
-
-            });
-
-        this.modal =
-            new WalletConnectModal({
-
-                projectId: PROJECT_ID,
-
-                chains: [TRON_CHAIN]
-
-            });
-
+        this.modal = new WalletConnectModal({
+            projectId: PROJECT_ID,
+            chains: [TRON_CHAIN]
+        });
     }
 
     async getInjected() {
-
-        if (typeof window === 'undefined')
-            return null;
-
-        if (window.tronWeb?.ready)
-            return window.tronWeb;
-
-        if (window.trustwallet?.tron)
-            return window.trustwallet.tron;
-
-        if (window.tronLink)
-            return window.tronLink;
-
+        if (typeof window === 'undefined') return null;
+        if (window.tronWeb?.ready) return window.tronWeb;
+        if (window.trustwallet?.tron) return window.trustwallet.tron;
+        if (window.tronLink) return window.tronLink;
         return null;
-
     }
 
     async connect() {
 
-        // TRY INJECTED FIRST
-
-        const injected =
-            await this.getInjected();
+        // ── 1. Try injected wallet first ──────────────────────────────────────
+        const injected = await this.getInjected();
 
         if (injected) {
-
             try {
-
                 if (injected.request) {
-
-                    await injected.request({
-
-                        method: 'tron_requestAccounts'
-
-                    });
-
+                    await injected.request({ method: 'tron_requestAccounts' });
                 }
-
             } catch (e) {
-
-                console.warn(e);
-
+                console.warn('tron_requestAccounts error:', e);
             }
 
-            const address =
-                injected.defaultAddress?.base58;
-
-            if (!address) {
-
-                throw new Error(
-                    "Wallet locked"
-                );
-
-            }
+            const address = injected.defaultAddress?.base58;
+            if (!address) throw new Error('Wallet locked or no account found');
 
             return {
-
                 address,
-
                 type: 'injected',
-
                 sign: async (tx) => {
-
-                    if (injected.trx?.sign) {
-
-                        return await
-                            injected.trx.sign(tx);
-
-                    }
-
-                    if (injected.signTransaction) {
-
-                        return await
-                            injected.signTransaction(tx);
-
-                    }
-
-                    throw new Error(
-                        "Wallet cannot sign"
-
-                    );
-
+                    if (injected.trx?.sign) return await injected.trx.sign(tx);
+                    if (injected.signTransaction) return await injected.signTransaction(tx);
+                    throw new Error('Injected wallet cannot sign');
                 }
-
             };
-
         }
 
-        // WALLET CONNECT
-
+        // ── 2. WalletConnect ──────────────────────────────────────────────────
         await this.initWC();
 
-        return new Promise(
+        return new Promise((resolve, reject) => {
 
-            (resolve, reject) => {
+            this.provider.on('display_uri', (uri) => {
+                if (this.isMobile) {
+                    // ✅ FIX 3: Use trust:// deep link scheme (more reliable than https link)
+                    window.location.href = `trust://wc?uri=${encodeURIComponent(uri)}`;
+                } else {
+                    this.modal.openModal({ uri });
+                }
+            });
 
-                this.provider.on(
+            const namespaces = {
+                tron: {
+                    chains: [TRON_CHAIN],
+                    methods: ['tron_signTransaction', 'tron_signMessage'],
+                    events: []
+                }
+            };
 
-                    'display_uri',
+            this.provider.connect({ namespaces })
+                .then(session => {
+                    this.modal?.closeModal();
 
-                    (uri) => {
+                    const account = session.namespaces.tron.accounts[0];
+                    const address = account.split(':').pop();
 
-                        if (this.isMobile) {
+                    resolve({
+                        address,
+                        type: 'walletconnect',
+                        sign: async (tx) => {
+                            // ✅ FIX 1: Trust Wallet requires params as an OBJECT
+                            //    { address, transaction: tx }  ← correct
+                            //    [tx]                          ← WRONG, causes "unknown method"
+                            tx.visible = false;
 
-                            window.location.href =
-
-                                `https://link.trustwallet.com/wc?uri=${encodeURIComponent(uri)
-                                }`;
-
-                        } else {
-
-                            this.modal.openModal({
-                                uri
+                            const result = await this.provider.request({
+                                method: 'tron_signTransaction',
+                                params: {
+                                    address,          // signer address
+                                    transaction: tx   // the unsigned tx object
+                                }
                             });
 
-                        }
+                            // ✅ FIX 2: Trust Wallet returns the signed tx directly
+                            //    or nested under .transaction — handle both cases
+                            if (!result) throw new Error('No result from wallet signing');
 
-                    }
-
-                );
-
-                const namespaces = {
-
-                    tron: {
-
-                        chains: [
-                            TRON_CHAIN
-                        ],
-
-                        methods: [
-
-                            'tron_signTransaction',
-
-                            'tron_signMessage'
-
-                        ],
-
-                        events: []
-
-                    }
-
-                };
-
-                this.provider.connect({
-
-                    namespaces
-
-                })
-
-                    .then(session => {
-
-                        this.modal.closeModal();
-
-                        const account =
-                            session.namespaces
-                                .tron.accounts[0];
-
-                        const address =
-                            account.split(':').pop();
-
-                        resolve({
-
-                            address,
-
-                            type: 'walletconnect',
-
-                            sign: async (tx) => {
-
-                                // IMPORTANT FIXES
-
-                                tx.visible = false;
-
-                                const result =
-                                    await this.provider.request({
-
-                                        method:
-                                            'tron_signTransaction',
-
-                                        params: [tx]
-
-                                    });
-
-                                // PARSE RESULT
-
-                                if (typeof result === 'string') {
-
-                                    return JSON.parse(
-                                        result
-                                    );
-
-                                }
-
-                                return result.transaction
-                                    || result;
-
+                            if (typeof result === 'string') {
+                                try { return JSON.parse(result); } catch { return result; }
                             }
 
-                        });
-
-                    })
-
-                    .catch(err => {
-
-                        this.modal.closeModal();
-
-                        reject(err);
-
+                            // Some wallets wrap it, some don't
+                            return result.transaction ?? result;
+                        }
                     });
-
-            }
-
-        );
-
+                })
+                .catch(err => {
+                    this.modal?.closeModal();
+                    reject(err);
+                });
+        });
     }
-
 }
 
-export const walletManager =
-    new WalletManager();
+export const walletManager = new WalletManager();
