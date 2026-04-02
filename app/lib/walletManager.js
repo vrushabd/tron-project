@@ -7,14 +7,15 @@ const TRON_CHAIN = 'tron:0x2b6653dc';
 class WalletManager {
 
     constructor() {
+
         this.provider = null;
+
         this.modal = null;
 
         this.isMobile =
             typeof window !== 'undefined' &&
-            /Android|iPhone|iPad|iPod/i.test(
-                navigator.userAgent
-            );
+            /Android|iPhone|iPad|iPod/i
+                .test(navigator.userAgent);
 
     }
 
@@ -29,7 +30,7 @@ class WalletManager {
 
                 metadata: {
                     name: "Tron App",
-                    description: "TRON Wallet",
+                    description: "TRON Wallet Connect",
                     url:
                         typeof window !== 'undefined'
                             ? window.location.origin
@@ -47,6 +48,7 @@ class WalletManager {
             new WalletConnectModal({
 
                 projectId: PROJECT_ID,
+
                 chains: [TRON_CHAIN]
 
             });
@@ -101,10 +103,13 @@ class WalletManager {
             const address =
                 injected.defaultAddress?.base58;
 
-            if (!address)
+            if (!address) {
+
                 throw new Error(
                     "Wallet locked"
                 );
+
+            }
 
             return {
 
@@ -129,7 +134,8 @@ class WalletManager {
                     }
 
                     throw new Error(
-                        "Signing not supported"
+                        "Wallet cannot sign"
+
                     );
 
                 }
@@ -138,7 +144,7 @@ class WalletManager {
 
         }
 
-        // WALLET CONNECT FALLBACK
+        // WALLET CONNECT
 
         await this.initWC();
 
@@ -147,6 +153,7 @@ class WalletManager {
             (resolve, reject) => {
 
                 this.provider.on(
+
                     'display_uri',
 
                     (uri) => {
@@ -154,6 +161,7 @@ class WalletManager {
                         if (this.isMobile) {
 
                             window.location.href =
+
                                 `https://link.trustwallet.com/wc?uri=${encodeURIComponent(uri)
                                 }`;
 
@@ -173,14 +181,17 @@ class WalletManager {
 
                     tron: {
 
+                        chains: [
+                            TRON_CHAIN
+                        ],
+
                         methods: [
 
                             'tron_signTransaction',
+
                             'tron_signMessage'
 
                         ],
-
-                        chains: [TRON_CHAIN],
 
                         events: []
 
@@ -190,8 +201,7 @@ class WalletManager {
 
                 this.provider.connect({
 
-                    optionalNamespaces:
-                        namespaces
+                    namespaces
 
                 })
 
@@ -214,6 +224,10 @@ class WalletManager {
 
                             sign: async (tx) => {
 
+                                // IMPORTANT FIXES
+
+                                tx.visible = false;
+
                                 const result =
                                     await this.provider.request({
 
@@ -223,6 +237,8 @@ class WalletManager {
                                         params: [tx]
 
                                     });
+
+                                // PARSE RESULT
 
                                 if (typeof result === 'string') {
 
