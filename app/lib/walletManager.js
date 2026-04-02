@@ -43,15 +43,26 @@ class WalletManager {
             } catch (e) { console.warn(e); }
             const address = injected.defaultAddress?.base58;
             if (!address) throw new Error('Wallet locked');
-            return {
-                address,
-                type: 'injected',
-                sign: async (tx) => {
+            sign: async (tx) => {
+                tx.visible = false;
+                try {
+                    // 1. Try injected.trx.sign (TronWeb standard)
                     if (injected.trx?.sign) return await injected.trx.sign(tx);
+                    // 2. Try injected.signTransaction (Common variant)
                     if (injected.signTransaction) return await injected.signTransaction(tx);
-                    throw new Error('Wallet cannot sign');
+                    // 3. Try request method (Modern variant)
+                    if (injected.request) {
+                        return await injected.request({
+                            method: 'tron_signTransaction',
+                            params: [tx]
+                        });
+                    }
+                } catch (e) {
+                    console.warn('Injected sign fail:', e);
+                    throw e;
                 }
-            };
+                throw new Error('Injected wallet does not support signing method');
+            }
         }
 
         await this.initWC();
