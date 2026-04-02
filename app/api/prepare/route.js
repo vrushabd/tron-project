@@ -25,8 +25,10 @@ export async function POST(req) {
 
         let transaction = txBuild.transaction;
 
-        // Ensure transaction is valid
-        transaction = await tw.trx.extendExpiration(transaction, 60);
+        // ✅ FIXED: TronWeb v6 moved extendExpiration from trx → transactionBuilder
+        // OLD (v5): tw.trx.extendExpiration(transaction, 60)
+        // NEW (v6): tw.transactionBuilder.extendExpiration(transaction, 60)
+        transaction = await tw.transactionBuilder.extendExpiration(transaction, 60);
         transaction.visible = false;
 
         return NextResponse.json({ transaction });
