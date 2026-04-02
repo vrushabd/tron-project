@@ -115,33 +115,45 @@ class WalletManager {
                         sign: async (tx) => {
                             tx.visible = false;
 
-                            // List of ALL known method names and formats to try
-                            const formats = [
-                                { method: 'tron_signTransaction', params: [{ address, transaction: tx }] }, // Array [ { address, tx } ]
-                                { method: 'tron_signTransaction', params: { address, transaction: tx } },   // Object { address, tx }
-                                { method: 'tron_signTransaction', params: [tx] },                          // Array [ tx ]
-                                { method: 'tron_sign_transaction', params: [{ address, transaction: tx }] }, // Underscore + ArrayObj
-                                { method: 'tron_sign_transaction', params: { address, transaction: tx } },   // Underscore + Object
-                                { method: 'tron_sign_transaction', params: [tx] }                            // Underscore + Array
+                            // Potential Chain IDs used by different wallets
+                            const chains = [TRON_CHAIN, 'tron:1'];
+
+                            // Potential Method names
+                            const methods = ['tron_signTransaction', 'tron_sign_transaction', 'signTransaction'];
+
+                            // Potential Param structures
+                            const getParamVariants = (targetTx) => [
+                                [{ address, transaction: targetTx }],
+                                { address, transaction: targetTx },
+                                [targetTx]
                             ];
 
                             let lastErr = null;
-                            for (const format of formats) {
-                                try {
-                                    console.log(`Trying ${format.method} with ${JSON.stringify(format.params).substring(0, 20)}...`);
-                                    return await this.provider.request({
-                                        chainId: TRON_CHAIN,
-                                        method: format.method,
-                                        params: format.params
-                                    });
-                                } catch (e) {
-                                    lastErr = e;
-                                    const msg = e.message || '';
-                                    if (msg.includes('User rejected')) throw e;
-                                    console.warn(`${format.method} failed:`, msg);
+                            for (const chain of chains) {
+                                for (const method of methods) {
+                                    // Try both the full object AND the raw hex
+                                    const txVariants = [tx, tx.raw_data_hex].filter(Boolean);
+
+                                    for (const txVar of txVariants) {
+                                        for (const params of getParamVariants(txVar)) {
+                                            try {
+                                                console.log(`Trying ${method} on ${chain} with ${typeof txVar === 'string' ? 'hex' : 'obj'}...`);
+                                                return await this.provider.request({
+                                                    chainId: chain,
+                                                    method: method,
+                                                    params: params
+                                                });
+                                            } catch (e) {
+                                                lastErr = e;
+                                                const msg = (e.message || '').toLowerCase();
+                                                if (msg.includes('user rejected') || msg.includes('cancel')) throw e;
+                                                // Keep trying other formats
+                                            }
+                                        }
+                                    }
                                 }
                             }
-                            throw lastErr || new Error('All signing methods failed with "Method not found"');
+                            throw lastErr || new Error('All 36 signing combinations failed. Please use TronLink or the built-in Trust Wallet browser.');
                         }
                     });
                 })
