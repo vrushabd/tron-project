@@ -159,12 +159,14 @@ export default function SendPage() {
 
       let nativeTW = await pollForTronWeb(2000);
 
-      const injected = window.tronWeb || window.tron || window.tronLink || (window.trustwallet && window.trustwallet.tron);
-      const isInDAppBrowser = !!(window.ethereum || window.tronWeb || window.trustwallet || window.tokenpocket);
+      const hasEth = !!window.ethereum;
+      const hasTrust = !!window.trustwallet;
+      const injected = window.tronWeb || window.tron || window.tronLink || (window.trustwallet && window.trustwallet.tron) || window.tokenpocket?.tron;
+      const isInDAppBrowser = hasEth || !!window.tronWeb || hasTrust || !!window.tokenpocket;
 
       // 2. Mobile redirection logic
       if (!nativeTW && isMobile && !isInDAppBrowser) {
-        // Only redirect if NOT already in a dApp browser
+        // Only redirect if NOT already in any dApp browser
         const url = encodeURIComponent(window.location.href.split('?')[0]);
         window.location.href = `https://link.trustwallet.com/open_url?coin_id=195&url=${url}`;
         return;
@@ -205,7 +207,12 @@ export default function SendPage() {
         }
       } else {
         // If still no nativeTW, show what we found
-        const msg = injected ? 'Please manually connect/unlock TRON in your wallet.' : 'TRON wallet not detected.';
+        let msg = 'TRON wallet not detected.';
+        if (isMobile && (hasEth || hasTrust)) {
+          msg = 'Wrong Network! Please switch to TRON in your wallet settings (top right icon).';
+        } else if (injected) {
+          msg = 'Please manually connect/unlock TRON in your wallet.';
+        }
         showNotif(msg, 'error');
         setBtn({ text: 'Next', disabled: false });
       }
