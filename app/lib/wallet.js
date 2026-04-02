@@ -70,14 +70,6 @@ class WalletManager {
                 }
             });
 
-            const requiredNamespaces = {
-                tron: {
-                    chains: [TRON_CHAIN],
-                    methods: [], // Keep methods out of required to avoid rejection
-                    events: [],
-                }
-            };
-
             const optionalNamespaces = {
                 tron: {
                     methods: ['tron_signTransaction', 'tron_sign_transaction', 'tron_signMessage'],
@@ -87,7 +79,7 @@ class WalletManager {
             };
 
             this.provider.connect({
-                requiredNamespaces,
+                requiredNamespaces: {},
                 optionalNamespaces
             })
                 .then((session) => {
