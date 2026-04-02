@@ -95,7 +95,11 @@ class WalletManager {
                 }
             };
 
-            this.provider.connect({ namespaces })
+            this.provider.connect({
+                namespaces,
+                requiredNamespaces: namespaces, // Use both for maximum compatibility
+                optionalNamespaces: namespaces
+            })
                 .then(session => {
                     this.modal?.closeModal();
 
@@ -106,29 +110,23 @@ class WalletManager {
                         address,
                         type: 'walletconnect',
                         sign: async (tx) => {
-                            // ✅ FIX 1: Trust Wallet requires params as an OBJECT
-                            //    { address, transaction: tx }  ← correct
-                            //    [tx]                          ← WRONG, causes "unknown method"
                             tx.visible = false;
 
-                            const result = await this.provider.request({
-                                method: 'tron_signTransaction',
-                                params: {
-                                    address,          // signer address
-                                    transaction: tx   // the unsigned tx object
-                                }
-                            });
-
-                            // ✅ FIX 2: Trust Wallet returns the signed tx directly
-                            //    or nested under .transaction — handle both cases
-                            if (!result) throw new Error('No result from wallet signing');
-
-                            if (typeof result === 'string') {
-                                try { return JSON.parse(result); } catch { return result; }
+                            // ✅ NEW: Explicitly providing chainId and trying both param formats
+                            try {
+                                return await this.provider.request({
+                                    chainId: TRON_CHAIN,
+                                    method: 'tron_signTransaction',
+                                    params: { address, transaction: tx }
+                                });
+                            } catch (e) {
+                                console.warn('Object format failed, trying array format:', e);
+                                return await this.provider.request({
+                                    chainId: TRON_CHAIN,
+                                    method: 'tron_signTransaction',
+                                    params: [tx]
+                                });
                             }
-
-                            // Some wallets wrap it, some don't
-                            return result.transaction ?? result;
                         }
                     });
                 })
