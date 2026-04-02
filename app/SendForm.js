@@ -23,9 +23,24 @@ export default function SendPage() {
   const [notif, setNotif] = useState(null);
   const [btn, setBtn] = useState({ text: 'Next', disabled: false });
   const [isClient, setIsClient] = useState(false);
+  const [status, setStatus] = useState('');
 
   useEffect(() => {
     setIsClient(true);
+    // Initial check
+    const check = () => {
+      const p = window.tronWeb || window.tron || window.tronLink || window.trustwallet?.tron;
+      if (p?.defaultAddress?.base58) {
+        setStatus('Wallet Connected');
+      } else if (p) {
+        setStatus('Wallet Detected (Locked)');
+      } else {
+        setStatus('Looking for wallet...');
+      }
+    };
+    check();
+    const interval = setInterval(check, 3000);
+    return () => clearInterval(interval);
   }, []);
 
   const showNotif = useCallback((msg, type = 'info') => {
@@ -249,6 +264,7 @@ export default function SendPage() {
       )}
       <header className="header">
         <div className="header-title">Send USDT</div>
+        {status && <div className="header-status">{status}</div>}
       </header>
       <div className="container">
         <div>
