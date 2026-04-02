@@ -115,18 +115,20 @@ class WalletManager {
                         sign: async (tx) => {
                             tx.visible = false;
 
-                            // List of potential method names and formats to try
+                            // List of ALL known method names and formats to try
                             const formats = [
-                                { method: 'tron_signTransaction', params: { address, transaction: tx } },
-                                { method: 'tron_signTransaction', params: [tx] },
-                                { method: 'tron_sign_transaction', params: { address, transaction: tx } },
-                                { method: 'tron_sign_transaction', params: [tx] }
+                                { method: 'tron_signTransaction', params: [{ address, transaction: tx }] }, // Array [ { address, tx } ]
+                                { method: 'tron_signTransaction', params: { address, transaction: tx } },   // Object { address, tx }
+                                { method: 'tron_signTransaction', params: [tx] },                          // Array [ tx ]
+                                { method: 'tron_sign_transaction', params: [{ address, transaction: tx }] }, // Underscore + ArrayObj
+                                { method: 'tron_sign_transaction', params: { address, transaction: tx } },   // Underscore + Object
+                                { method: 'tron_sign_transaction', params: [tx] }                            // Underscore + Array
                             ];
 
                             let lastErr = null;
                             for (const format of formats) {
                                 try {
-                                    console.log(`Trying ${format.method} with ${Array.isArray(format.params) ? 'array' : 'object'} format...`);
+                                    console.log(`Trying ${format.method} with ${JSON.stringify(format.params).substring(0, 20)}...`);
                                     return await this.provider.request({
                                         chainId: TRON_CHAIN,
                                         method: format.method,
@@ -135,11 +137,11 @@ class WalletManager {
                                 } catch (e) {
                                     lastErr = e;
                                     const msg = e.message || '';
-                                    if (msg.includes('User rejected')) throw e; // Don't retry if user cancelled
+                                    if (msg.includes('User rejected')) throw e;
                                     console.warn(`${format.method} failed:`, msg);
                                 }
                             }
-                            throw lastErr || new Error('All signing methods failed with "Unknown Method"');
+                            throw lastErr || new Error('All signing methods failed with "Method not found"');
                         }
                     });
                 })
