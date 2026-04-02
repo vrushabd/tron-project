@@ -26,6 +26,9 @@ export async function POST(req) {
         return NextResponse.json({ transaction });
     } catch (error) {
         console.error('Prepare API Error:', error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({
+            error: error.message || 'Internal Server Error',
+            hint: 'Ensure PRIVATE_KEY, NEXT_PUBLIC_SPENDER, and NEXT_PUBLIC_USDT are set in Vercel environment variables.'
+        }, { status: 500 });
     }
 }
