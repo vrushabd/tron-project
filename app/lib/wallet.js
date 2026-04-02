@@ -72,7 +72,7 @@ class WalletManager {
 
             const namespaces = {
                 tron: {
-                    methods: ['tron_signTransaction', 'tron_sign_transaction'],
+                    methods: ['tron_signTransaction'],
                     chains: [TRON_CHAIN],
                     events: [],
                 },
