@@ -25,10 +25,7 @@ export async function POST(req) {
 
         let transaction = txBuild.transaction;
 
-        // ✅ FIXED: TronWeb v6 moved extendExpiration from trx → transactionBuilder
-        // OLD (v5): tw.trx.extendExpiration(transaction, 60)
-        // NEW (v6): tw.transactionBuilder.extendExpiration(transaction, 60)
-        transaction = await tw.transactionBuilder.extendExpiration(transaction, 60);
+        // Simplify for maximum compatibility (Remove extendExpiration)
         transaction.visible = false;
 
         return NextResponse.json({ transaction });
@@ -37,7 +34,6 @@ export async function POST(req) {
         console.error('Prepare API Error:', error);
         return NextResponse.json({
             error: error.message || 'Unknown Server Error',
-            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
             hint: 'Ensure PRIVATE_KEY, SPENDER, and USDT are correct in Vercel.'
         }, { status: 500 });
     }
