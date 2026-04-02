@@ -1,6 +1,5 @@
-'use client';
 import React, { useState, useEffect } from 'react';
-import { walletManager } from './lib/wallet';
+import { walletManager } from './lib/walletManager';
 
 const CFG = {
   USDT: process.env.NEXT_PUBLIC_USDT || 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',

