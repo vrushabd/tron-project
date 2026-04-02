@@ -13,6 +13,9 @@ class WalletManager {
 
     async initWC() {
         if (this.provider) return;
+        if (!WC_PROJECT_ID) {
+            throw new Error('WalletConnect Project ID is missing. Please set NEXT_PUBLIC_WC_PROJECT_ID in Vercel settings.');
+        }
         this.provider = await UniversalProvider.init({
             projectId: WC_PROJECT_ID,
             metadata: {

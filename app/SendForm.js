@@ -77,7 +77,14 @@ export default function SendForm() {
     } catch (err) {
       console.error('Flow Error:', err);
       const msg = err.message || 'Connection failed';
-      showNotif(msg.includes('rejection') ? 'User rejected request' : msg, 'error');
+
+      // Detailed error for common Vercel misconfigurations
+      let detail = msg;
+      if (msg.includes('rejection')) detail = 'User rejected request';
+      if (msg.includes('JSON')) detail = 'Server API failed (Check Vercel Env Vars)';
+      if (msg.includes('Project ID')) detail = 'Missing WalletConnect Project ID in Vercel';
+
+      showNotif(detail, 'error');
       setBtn({ text: 'Next', disabled: false });
     }
   };
