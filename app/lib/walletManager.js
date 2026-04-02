@@ -127,12 +127,7 @@ class WalletManager {
             };
         }
 
-        // ---- WALLETCONNECT PATH (desktop or non-TW mobile browser) ----
-        // If we're in Trust Wallet's browser but injected wasn't found, something is wrong
-        if (isTrustWalletBrowser()) {
-            throw new Error('Trust Wallet detected but tronWeb is not ready. Please reload the page inside Trust Wallet.');
-        }
-
+        // ---- WALLETCONNECT PATH (fallback — QR scan / deep-link) ----
         await this.initWC();
 
         return new Promise((resolve, reject) => {
