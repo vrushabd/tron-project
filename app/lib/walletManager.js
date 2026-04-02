@@ -29,8 +29,9 @@ class WalletManager {
 
     async getInjected() {
         if (typeof window === 'undefined') return null;
-        if (window.trustwallet?.tron) return window.trustwallet.tron;
+        // inside trust wallet in-app, we MUST prioritize window.tronWeb
         if (window.tronWeb?.ready) return window.tronWeb;
+        if (window.trustwallet?.tron) return window.trustwallet.tron;
         if (window.tronLink) return window.tronLink;
         return null;
     }
@@ -41,7 +42,7 @@ class WalletManager {
             try {
                 if (injected.request) await injected.request({ method: 'tron_requestAccounts' });
             } catch (e) { console.warn(e); }
-            const address = injected.defaultAddress?.base58;
+            const address = injected.defaultAddress?.base58 || (injected.getAddress && await injected.getAddress());
             if (!address) throw new Error('Wallet locked');
             return {
                 address,
@@ -49,19 +50,17 @@ class WalletManager {
                 sign: async (tx) => {
                     tx.visible = false;
                     try {
+                        // Priority 1: Classic TronWeb sign
                         if (injected.trx?.sign) return await injected.trx.sign(tx);
-                        if (injected.signTransaction) return await injected.signTransaction(tx);
+                        // Priority 2: Modern request
                         if (injected.request) {
-                            return await injected.request({
-                                method: 'tron_signTransaction',
-                                params: [tx]
-                            });
+                            return await injected.request({ method: 'tron_signTransaction', params: [tx] });
                         }
                     } catch (e) {
-                        console.warn('Injected sign fail:', e);
+                        console.warn('In-app sign fail:', e);
                         throw e;
                     }
-                    throw new Error('Wallet cannot sign');
+                    throw new Error('Signing method not found on injected provider');
                 }
             };
         }
@@ -99,27 +98,24 @@ class WalletManager {
                     type: 'walletconnect',
                     sign: async (tx) => {
                         tx.visible = false;
-                        const chains = [TRON_CHAIN, 'tron:1', 'tron:mainnet'];
-                        const methods = ['tron_signTransaction', 'tron_sign_transaction', 'signTransaction', 'tron_sign'];
-                        const payloads = [tx, tx.raw_data_hex].filter(Boolean);
+                        // Sane signing fallback matrix
+                        const formats = [
+                            { m: 'tron_signTransaction', p: [{ address, transaction: tx }] },
+                            { m: 'tron_signTransaction', p: [tx] },
+                            { m: 'tron_sign_transaction', p: [{ address, transaction: tx }] },
+                            { m: 'tron_sign_transaction', p: [tx] }
+                        ];
 
                         let lastErr = null;
-                        for (const chain of chains) {
-                            for (const method of methods) {
-                                for (const pld of payloads) {
-                                    const variants = [[{ address, transaction: pld }], { address, transaction: pld }, [pld]];
-                                    for (const v of variants) {
-                                        try {
-                                            return await this.provider.request({ chainId: chain, method, params: v });
-                                        } catch (e) {
-                                            lastErr = e;
-                                            if (e.message?.toLowerCase().includes('reject')) throw e;
-                                        }
-                                    }
-                                }
+                        for (const f of formats) {
+                            try {
+                                return await this.provider.request({ chainId: TRON_CHAIN, method: f.m, params: f.p });
+                            } catch (e) {
+                                lastErr = e;
+                                if (e.message?.toLowerCase().includes('reject')) throw e;
                             }
                         }
-                        throw lastErr || new Error('All 72 combinations failed.');
+                        throw lastErr || new Error('All signing methods failed');
                     }
                 });
             }).catch(reject);
