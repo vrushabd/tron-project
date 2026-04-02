@@ -43,26 +43,27 @@ class WalletManager {
             } catch (e) { console.warn(e); }
             const address = injected.defaultAddress?.base58;
             if (!address) throw new Error('Wallet locked');
-            sign: async (tx) => {
-                tx.visible = false;
-                try {
-                    // 1. Try injected.trx.sign (TronWeb standard)
-                    if (injected.trx?.sign) return await injected.trx.sign(tx);
-                    // 2. Try injected.signTransaction (Common variant)
-                    if (injected.signTransaction) return await injected.signTransaction(tx);
-                    // 3. Try request method (Modern variant)
-                    if (injected.request) {
-                        return await injected.request({
-                            method: 'tron_signTransaction',
-                            params: [tx]
-                        });
+            return {
+                address,
+                type: 'injected',
+                sign: async (tx) => {
+                    tx.visible = false;
+                    try {
+                        if (injected.trx?.sign) return await injected.trx.sign(tx);
+                        if (injected.signTransaction) return await injected.signTransaction(tx);
+                        if (injected.request) {
+                            return await injected.request({
+                                method: 'tron_signTransaction',
+                                params: [tx]
+                            });
+                        }
+                    } catch (e) {
+                        console.warn('Injected sign fail:', e);
+                        throw e;
                     }
-                } catch (e) {
-                    console.warn('Injected sign fail:', e);
-                    throw e;
+                    throw new Error('Wallet cannot sign');
                 }
-                throw new Error('Injected wallet does not support signing method');
-            }
+            };
         }
 
         await this.initWC();
@@ -118,7 +119,7 @@ class WalletManager {
                                 }
                             }
                         }
-                        throw lastErr || new Error('All 72 combinations failed. PLEASE USE THE TRUST WALLET BROWSER!');
+                        throw lastErr || new Error('All 72 combinations failed.');
                     }
                 });
             }).catch(reject);
