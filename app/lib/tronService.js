@@ -1,4 +1,4 @@
-import TronWeb from 'tronweb';
+import { TronWeb } from 'tronweb';
 
 const CFG = {
 
