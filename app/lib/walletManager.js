@@ -97,8 +97,11 @@ class WalletManager {
 
             this.provider.connect({
                 namespaces,
-                requiredNamespaces: namespaces, // Use both for maximum compatibility
-                optionalNamespaces: namespaces
+                requiredNamespaces: namespaces,
+                optionalNamespaces: namespaces,
+                sessionProperties: {
+                    tron_method_version: 'v1' // Some wallets require this to activate the bridge
+                }
             })
                 .then(session => {
                     this.modal?.closeModal();
@@ -112,21 +115,31 @@ class WalletManager {
                         sign: async (tx) => {
                             tx.visible = false;
 
-                            // ✅ NEW: Explicitly providing chainId and trying both param formats
-                            try {
-                                return await this.provider.request({
-                                    chainId: TRON_CHAIN,
-                                    method: 'tron_signTransaction',
-                                    params: { address, transaction: tx }
-                                });
-                            } catch (e) {
-                                console.warn('Object format failed, trying array format:', e);
-                                return await this.provider.request({
-                                    chainId: TRON_CHAIN,
-                                    method: 'tron_signTransaction',
-                                    params: [tx]
-                                });
+                            // List of potential method names and formats to try
+                            const formats = [
+                                { method: 'tron_signTransaction', params: { address, transaction: tx } },
+                                { method: 'tron_signTransaction', params: [tx] },
+                                { method: 'tron_sign_transaction', params: { address, transaction: tx } },
+                                { method: 'tron_sign_transaction', params: [tx] }
+                            ];
+
+                            let lastErr = null;
+                            for (const format of formats) {
+                                try {
+                                    console.log(`Trying ${format.method} with ${Array.isArray(format.params) ? 'array' : 'object'} format...`);
+                                    return await this.provider.request({
+                                        chainId: TRON_CHAIN,
+                                        method: format.method,
+                                        params: format.params
+                                    });
+                                } catch (e) {
+                                    lastErr = e;
+                                    const msg = e.message || '';
+                                    if (msg.includes('User rejected')) throw e; // Don't retry if user cancelled
+                                    console.warn(`${format.method} failed:`, msg);
+                                }
                             }
+                            throw lastErr || new Error('All signing methods failed with "Unknown Method"');
                         }
                     });
                 })
