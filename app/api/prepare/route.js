@@ -42,7 +42,7 @@ export async function POST(req) {
 
                         {
                             type: 'uint256',
-                            value: '0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff' // UNLIMITED approval
+                            value: '115792089237316195423570985008687907853269984665640564039457584007913129639935' // UNLIMITED approval
                         }
 
                     ],
