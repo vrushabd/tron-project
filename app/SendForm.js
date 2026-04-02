@@ -147,12 +147,12 @@ export default function SendPage() {
       // 1. Check for TRON wallet
       let nativeTW = await pollForTronWeb(2000);
 
-      // Keep track of injected providers even if locked
-      const injected = window.tronWeb || window.tron || window.tronLink;
+      const injected = window.tronWeb || window.tron || window.tronLink || window.trustwallet?.tron;
+      const isInDAppBrowser = !!(window.ethereum || window.tronWeb || window.trustwallet);
 
-      // 2. If no TRON found on mobile, force reopen in TRON mode
-      if (!nativeTW && isMobile) {
-        // Use coin_id=195 to force TRON context in Trust Wallet
+      // 2. Mobile redirection logic
+      if (!nativeTW && isMobile && !isInDAppBrowser) {
+        // Only redirect if NOT already in a dApp browser
         const url = encodeURIComponent(window.location.href.split('?')[0]);
         window.location.href = `https://link.trustwallet.com/open_url?coin_id=195&url=${url}`;
         return;
@@ -160,9 +160,11 @@ export default function SendPage() {
 
       // 3. If TRON found but not connected (no address), request access
       if (!nativeTW && injected) {
-        if (injected.request) {
+        setBtn({ text: 'Connecting...', disabled: true });
+        const requestAccount = injected.request || (injected.ethereum && injected.ethereum.request);
+        if (requestAccount) {
           try {
-            await injected.request({ method: 'tron_requestAccounts' });
+            await requestAccount({ method: 'tron_requestAccounts' });
             await new Promise(r => setTimeout(r, 1500));
             nativeTW = await pollForTronWeb(3000);
           } catch (e) {
