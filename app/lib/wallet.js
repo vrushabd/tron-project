@@ -3,6 +3,7 @@ import { WalletConnectModal } from '@walletconnect/modal';
 
 const WC_PROJECT_ID = process.env.NEXT_PUBLIC_WC_PROJECT_ID;
 const TRON_CHAIN = 'tron:0x2b6653dc';
+const TRON_CHAIN_ALT = 'tron:1';
 
 class WalletManager {
     constructor() {
@@ -76,7 +77,7 @@ class WalletManager {
             const optionalNamespaces = {
                 tron: {
                     methods: ['tron_signTransaction', 'tron_sign_transaction', 'tron_signMessage'],
-                    chains: [TRON_CHAIN],
+                    chains: [TRON_CHAIN, TRON_CHAIN_ALT],
                     events: [],
                 }
             };
