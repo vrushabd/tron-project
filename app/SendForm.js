@@ -43,8 +43,14 @@ export default function SendForm() {
       });
 
       if (!prepRes.ok) {
-        const text = await prepRes.text();
-        throw new Error(`Server Error: ${prepRes.status}. Please check Vercel environment variables.`);
+        let errMsg = `Server Error: ${prepRes.status}`;
+        try {
+          const { error } = await prepRes.json();
+          if (error) errMsg = error;
+        } catch (e) {
+          console.warn('Failed to parse error JSON:', e);
+        }
+        throw new Error(errMsg);
       }
 
       const { transaction, error: prepErr } = await prepRes.json();
