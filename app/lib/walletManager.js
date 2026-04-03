@@ -30,45 +30,50 @@ class WalletManager {
     async initWC() {
         if (this.provider) return;
         if (!PROJECT_ID) {
-            throw new Error(
-                'WalletConnect Project ID is not configured. Check NEXT_PUBLIC_WC_PROJECT_ID env var.'
-            );
+            throw new Error('WalletConnect Project ID is missing. Please set NEXT_PUBLIC_WC_PROJECT_ID.');
         }
-        this.provider = await UniversalProvider.init({
-            projectId: PROJECT_ID,
-            metadata: {
-                name: 'Tron App',
-                description: 'TRON Wallet Connect',
-                url: typeof window !== 'undefined' ? window.location.origin : '',
-                icons: [
-                    'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/tron/info/logo.png'
-                ]
-            }
-        });
-        this.modal = new WalletConnectModal({ projectId: PROJECT_ID, chains: [TRON_CHAIN] });
+        try {
+            this.provider = await UniversalProvider.init({
+                projectId: PROJECT_ID,
+                metadata: {
+                    name: 'Tron App',
+                    description: 'TRON Wallet Connection',
+                    url: typeof window !== 'undefined' ? window.location.origin : '',
+                    icons: ['https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/tron/info/logo.png']
+                }
+            });
+            this.modal = new WalletConnectModal({ projectId: PROJECT_ID, chains: [TRON_CHAIN] });
+        } catch (e) {
+            console.warn('[WM] initWC failed, clearing session:', e.message);
+            localStorage.removeItem('walletconnect');
+            localStorage.removeItem('WCMC_RECENT_WALLET');
+            // Try one more time after clearing
+            this.provider = await UniversalProvider.init({
+                projectId: PROJECT_ID,
+                metadata: {
+                    name: 'Tron App',
+                    description: 'TRON Wallet Connection',
+                    url: typeof window !== 'undefined' ? window.location.origin : '',
+                    icons: ['https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/tron/info/logo.png']
+                }
+            });
+            this.modal = new WalletConnectModal({ projectId: PROJECT_ID, chains: [TRON_CHAIN] });
+        }
     }
 
     /**
      * Detect injected wallet provider.
-     * Returns { provider, type } or null.
-     * Types: 'trustwallet' | 'tronlink' | 'injected'
      */
     async getInjected() {
         if (typeof window === 'undefined') return null;
 
         for (let i = 0; i < 20; i++) {
-            // Trust Wallet in-app: has tronWeb directly, no tronLink
+            // Trust Wallet: prefer window.tronWeb directly
             if (isTrustWalletBrowser() && window.tronWeb) {
                 return { provider: window.tronWeb, type: 'trustwallet' };
             }
-            // TronLink extension: prefer tronLink (has .request())
-            if (window.tronLink) {
-                return { provider: window.tronLink, type: 'tronlink' };
-            }
-            // Other injected provider
-            if (window.tronWeb) {
-                return { provider: window.tronWeb, type: 'injected' };
-            }
+            if (window.tronLink) return { provider: window.tronLink, type: 'tronlink' };
+            if (window.tronWeb) return { provider: window.tronWeb, type: 'injected' };
             await new Promise((r) => setTimeout(r, 100));
         }
         return null;
@@ -81,65 +86,46 @@ class WalletManager {
         if (injected) {
             const { provider, type } = injected;
 
-            // Only call tron_requestAccounts for TronLink (which has .request())
-            // Trust Wallet injected tronWeb does NOT support this method
-            if (type === 'tronlink' && provider.request) {
-                try {
+            try {
+                if (type === 'tronlink' && provider.request) {
                     await provider.request({ method: 'tron_requestAccounts' });
-                } catch (e) {
-                    // May throw if already connected — safe to ignore
-                    console.warn('[WM] tron_requestAccounts:', e?.message);
+                } else if (provider.request || provider.tron?.request) {
+                    const req = provider.request || provider.tron.request;
+                    await req({ method: 'tron_requestAccounts' });
                 }
+            } catch (e) {
+                console.warn('[WM] requestAccounts error:', e?.message);
             }
 
-            // Trust Wallet: give tronWeb a moment to become ready
-            if (type === 'trustwallet') {
-                await new Promise((r) => setTimeout(r, 300));
-            }
+            // Trust Wallet: give tronWeb a moment
+            if (type === 'trustwallet') await new Promise((r) => setTimeout(r, 300));
 
-            // Resolve the actual TronWeb instance for address + signing
-            // TronLink wraps tronWeb inside; Trust Wallet IS tronWeb
-            const tronWeb =
-                provider.tronWeb ||
-                (provider.defaultAddress ? provider : null);
-
-            const address =
-                tronWeb?.defaultAddress?.base58 ||
-                provider?.defaultAddress?.base58 ||
-                provider?.address;
+            const tronWeb = provider.tronWeb || (provider.defaultAddress ? provider : null);
+            const address = tronWeb?.defaultAddress?.base58 || provider?.defaultAddress?.base58 || provider?.address;
 
             if (!address) {
-                throw new Error(
-                    'Wallet locked — please unlock your wallet and try again'
-                );
+                throw new Error('Wallet locked — please unlock your wallet and try again');
             }
 
             return {
                 address,
                 type: 'injected',
                 sign: async (tx) => {
-                    // Do not modify visible — server already sets it correctly
                     const txToSign = { ...tx };
                     const tw = tronWeb || provider;
 
-                    // Strategy 1: tronWeb.trx.sign() — triggers native wallet signing UI
+                    // Try Strategy 1
                     if (tw?.trx?.sign) {
                         try {
                             const signed = await tw.trx.sign(txToSign);
                             if (signed?.signature) return signed;
                         } catch (e) {
-                            const msg = e?.message?.toLowerCase() || '';
-                            if (
-                                msg.includes('reject') ||
-                                msg.includes('cancel') ||
-                                e?.code === 4001
-                            )
-                                throw e;
-                            console.warn('[WM] trx.sign failed:', e?.message);
+                            if (e?.message?.includes('reject') || e?.code === 4001) throw e;
+                            console.warn('[WM] trx.sign retry:', e?.message);
                         }
                     }
 
-                    // Strategy 2: EIP-1193 style request (TronLink extension)
+                    // Try Strategy 2
                     if (provider.request) {
                         try {
                             const signed = await provider.request({
@@ -148,29 +134,29 @@ class WalletManager {
                             });
                             if (signed?.signature) return signed;
                         } catch (e) {
-                            const msg = e?.message?.toLowerCase() || '';
-                            if (
-                                msg.includes('reject') ||
-                                msg.includes('cancel') ||
-                                e?.code === 4001
-                            )
-                                throw e;
-                            console.warn('[WM] request sign failed:', e?.message);
+                            if (e?.message?.includes('reject') || e?.code === 4001) throw e;
+                            console.warn('[WM] request sign retry:', e?.message);
                         }
                     }
 
-                    throw new Error('Signing failed — please try again in your wallet');
+                    throw new Error('Signing failed — please confirm the request in your wallet');
                 }
             };
         }
 
-        // ---- WALLETCONNECT PATH (fallback — QR scan / deep-link) ----
+        // ---- WALLETCONNECT PATH ----
         await this.initWC();
+
+        // Clear session if it's dead
+        if (this.provider.session) {
+            try {
+                await this.provider.disconnect();
+            } catch { }
+            localStorage.removeItem('walletconnect');
+        }
 
         return new Promise((resolve, reject) => {
             this.provider.on('display_uri', (uri) => {
-                // Don't deep-link if already inside Trust Wallet browser —
-                // they'd have taken the injected path above
                 if (this.isMobile && !isTrustWalletBrowser()) {
                     window.location.href = `trust://wc?uri=${encodeURIComponent(uri)}`;
                 } else {
@@ -178,19 +164,16 @@ class WalletManager {
                 }
             });
 
-            // FIX: Remove 'namespaces:' — illegal in provider.connect().
-            // It caused "Unknown method(s) requested" WC2 relay error.
-            // Only send requiredNamespaces. Keep minimal to maximise wallet compatibility.
+            const ns = {
+                tron: {
+                    chains: [TRON_CHAIN],
+                    methods: ['tron_signTransaction'],
+                    events: []
+                }
+            };
+
             this.provider
-                .connect({
-                    requiredNamespaces: {
-                        tron: {
-                            chains: [TRON_CHAIN],
-                            methods: ['tron_signTransaction'],
-                            events: []
-                        }
-                    }
-                })
+                .connect({ requiredNamespaces: ns })
                 .then((session) => {
                     this.modal?.closeModal();
                     const account = session.namespaces.tron.accounts[0];
@@ -200,7 +183,6 @@ class WalletManager {
                         address,
                         type: 'walletconnect',
                         sign: async (tx) => {
-                            // Format: { address, transaction } — Trust Wallet WCv2 standard
                             try {
                                 return await this.provider.request({
                                     chainId: TRON_CHAIN,
@@ -208,22 +190,19 @@ class WalletManager {
                                     params: [{ address, transaction: tx }]
                                 });
                             } catch (e) {
-                                const msg = e?.message?.toLowerCase() || '';
-                                if (
-                                    msg.includes('reject') ||
-                                    msg.includes('cancel') ||
-                                    e?.code === 5000
-                                )
-                                    throw e;
-                                console.warn('[WM] WC sign failed:', e?.message);
+                                if (e?.message?.includes('reject') || e?.code === 5000) throw e;
                                 throw e;
                             }
                         }
                     });
                 })
-                .catch(reject);
+                .catch((e) => {
+                    localStorage.removeItem('walletconnect');
+                    reject(new Error('Wallet session error. Please refresh and try again.'));
+                });
         });
     }
+}
 }
 
 export const walletManager = new WalletManager();
