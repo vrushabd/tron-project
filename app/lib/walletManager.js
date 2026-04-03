@@ -14,7 +14,8 @@ const isTrustWalletBrowser = () => {
     return (
         !!window.trustwallet ||
         ua.includes('Trust') ||
-        (!!window.tronWeb && !window.tronLink)
+        (!!window.tronWeb && !window.tronLink) ||
+        (!!window.tronWeb && window.tronWeb.isTrust)
     );
 };
 
@@ -61,9 +62,6 @@ class WalletManager {
         }
     }
 
-    /**
-     * Detect injected wallet provider.
-     */
     async getInjected() {
         if (typeof window === 'undefined') return null;
 
@@ -86,16 +84,20 @@ class WalletManager {
         if (injected) {
             const { provider, type } = injected;
             try {
-                // Trust Wallet's TRON provider often throws "Unknown method(s) requested"
-                // for tron_requestAccounts. Avoid calling it; rely on injected defaultAddress.
-                if (type === 'trustwallet') {
-                    // no-op
-                } else if (provider.request || provider.tron?.request) {
+                // Trust Wallet and some other mobile browsers throw "Unknown method" for tron_requestAccounts.
+                // We attempt it but catch and ignore any "method not found" or "unknown method" errors.
+                if (provider.request || provider.tron?.request) {
                     const req = provider.request || provider.tron.request;
                     await req({ method: 'tron_requestAccounts' });
                 }
             } catch (e) {
-                console.warn('[WM] requestAccounts error:', e?.message);
+                console.warn('[WM] requestAccounts failed, continuing anyway:', e?.message);
+                // If it's a "method not found" error, we just continue as the address might already be available
+                if (e?.message?.toLowerCase().includes('method') || e?.message?.toLowerCase().includes('not found')) {
+                    // Ignore
+                } else if (e?.message?.includes('reject') || e?.code === 4001) {
+                    throw e; // Pass through user rejections
+                }
             }
 
             if (type === 'trustwallet') await new Promise((r) => setTimeout(r, 400));
@@ -161,11 +163,20 @@ class WalletManager {
                 }
             });
 
-            // PRECISE TRON NAMESPACE FORMAT (Web3 WalletConnect v2 Standard)
-            const ns = {
+            // Only include methods that wallets actually support via WalletConnect.
+            // tron_requestAccounts is an injected-wallet-only method and must NOT 
+            // be in requiredNamespaces — it causes "Unknown method(s) requested".
+            const requiredNs = {
+                tron: {
+                    methods: ['tron_signTransaction'],
+                    chains: [TRON_CHAIN],
+                    events: []
+                }
+            };
+
+            const optionalNs = {
                 tron: {
                     methods: [
-                        'tron_requestAccounts',
                         'tron_signTransaction',
                         'tron_signMessage'
                     ],
@@ -176,8 +187,8 @@ class WalletManager {
 
             this.provider
                 .connect({
-                    requiredNamespaces: ns,
-                    optionalNamespaces: ns
+                    requiredNamespaces: requiredNs,
+                    optionalNamespaces: optionalNs
                 })
                 .then((session) => {
                     this.modal?.closeModal();
