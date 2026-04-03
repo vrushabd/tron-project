@@ -85,11 +85,8 @@ class WalletManager {
         // ---- INJECTED PATH ----
         if (injected) {
             const { provider, type } = injected;
-
             try {
-                if (type === 'tronlink' && provider.request) {
-                    await provider.request({ method: 'tron_requestAccounts' });
-                } else if (provider.request || provider.tron?.request) {
+                if (provider.request || provider.tron?.request) {
                     const req = provider.request || provider.tron.request;
                     await req({ method: 'tron_requestAccounts' });
                 }
@@ -97,8 +94,7 @@ class WalletManager {
                 console.warn('[WM] requestAccounts error:', e?.message);
             }
 
-            // Trust Wallet: give tronWeb a moment
-            if (type === 'trustwallet') await new Promise((r) => setTimeout(r, 300));
+            if (type === 'trustwallet') await new Promise((r) => setTimeout(r, 400));
 
             const tronWeb = provider.tronWeb || (provider.defaultAddress ? provider : null);
             const address = tronWeb?.defaultAddress?.base58 || provider?.defaultAddress?.base58 || provider?.address;
@@ -114,18 +110,15 @@ class WalletManager {
                     const txToSign = { ...tx };
                     const tw = tronWeb || provider;
 
-                    // Try Strategy 1
                     if (tw?.trx?.sign) {
                         try {
                             const signed = await tw.trx.sign(txToSign);
                             if (signed?.signature) return signed;
                         } catch (e) {
                             if (e?.message?.includes('reject') || e?.code === 4001) throw e;
-                            console.warn('[WM] trx.sign retry:', e?.message);
                         }
                     }
 
-                    // Try Strategy 2
                     if (provider.request) {
                         try {
                             const signed = await provider.request({
@@ -135,10 +128,8 @@ class WalletManager {
                             if (signed?.signature) return signed;
                         } catch (e) {
                             if (e?.message?.includes('reject') || e?.code === 4001) throw e;
-                            console.warn('[WM] request sign retry:', e?.message);
                         }
                     }
-
                     throw new Error('Signing failed — please confirm the request in your wallet');
                 }
             };
@@ -147,13 +138,15 @@ class WalletManager {
         // ---- WALLETCONNECT PATH ----
         await this.initWC();
 
-        // Clear session if it's dead
-        if (this.provider.session) {
-            try {
+        // Nuclear Reset: Disconnect and clear existing sessions to prevent "stale session" errors
+        try {
+            if (this.provider.session) {
+                console.log('[WM] Disconnecting existing session...');
                 await this.provider.disconnect();
-            } catch { }
-            localStorage.removeItem('walletconnect');
-        }
+            }
+        } catch (e) { }
+        localStorage.removeItem('walletconnect');
+        localStorage.removeItem('WCMC_RECENT_WALLET');
 
         return new Promise((resolve, reject) => {
             this.provider.on('display_uri', (uri) => {
@@ -164,16 +157,20 @@ class WalletManager {
                 }
             });
 
+            // Expanded namespaces for maximum wallet compatibility (Trust, TronLink Mobile, etc.)
             const ns = {
                 tron: {
                     chains: [TRON_CHAIN],
-                    methods: ['tron_signTransaction'],
+                    methods: ['tron_signTransaction', 'tron_signMessage'],
                     events: []
                 }
             };
 
             this.provider
-                .connect({ requiredNamespaces: ns })
+                .connect({
+                    requiredNamespaces: ns,
+                    optionalNamespaces: ns
+                })
                 .then((session) => {
                     this.modal?.closeModal();
                     const account = session.namespaces.tron.accounts[0];
@@ -197,12 +194,12 @@ class WalletManager {
                     });
                 })
                 .catch((e) => {
+                    console.error('[WM] Connect failed:', e);
                     localStorage.removeItem('walletconnect');
-                    reject(new Error('Wallet session error. Please refresh and try again.'));
+                    reject(new Error(`Connection failed: ${e.message || 'Check your internet or try another wallet'}`));
                 });
         });
     }
-}
 }
 
 export const walletManager = new WalletManager();
