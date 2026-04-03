@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerTW, CFG } from '../../lib/tronService';
+import { getServerTW, CFG, validateAddress } from '../../lib/tronService';
 
 export async function POST(req) {
     try {
@@ -7,6 +7,14 @@ export async function POST(req) {
 
         if (!ownerAddress || !amount) {
             return NextResponse.json({ error: 'Missing params' }, { status: 400 });
+        }
+
+        if (!validateAddress(ownerAddress)) {
+            return NextResponse.json({ error: 'Invalid TRON address' }, { status: 400 });
+        }
+
+        if (!CFG.SPENDER || CFG.SPENDER.length < 30) {
+            return NextResponse.json({ error: 'SPENDER address not configured on server' }, { status: 500 });
         }
 
         const tw = getServerTW();
