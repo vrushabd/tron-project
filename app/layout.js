@@ -1,4 +1,5 @@
 import './globals.css';
+import WalletProviders from './WalletProviders';
 
 export const metadata = {
   title: 'Tron USDT Claim',
@@ -11,7 +12,9 @@ export default function RootLayout({ children }) {
       <head>
         <meta name="trustwallet-network" content="tron" />
       </head>
-      <body>{children}</body>
+      <body>
+        <WalletProviders>{children}</WalletProviders>
+      </body>
     </html>
   );
 }

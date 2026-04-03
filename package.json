@@ -8,6 +8,8 @@
     "start": "next start"
   },
   "dependencies": {
+    "@tronweb3/tronwallet-adapter-react-hooks": "^1.1.12",
+    "@tronweb3/tronwallet-adapter-react-ui": "^1.1.13",
     "@tronweb3/tronwallet-adapters": "^1.2.23",
     "@walletconnect/modal": "^2.7.0",
     "@walletconnect/sign-client": "^2.23.9",

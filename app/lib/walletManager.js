@@ -86,7 +86,11 @@ class WalletManager {
         if (injected) {
             const { provider, type } = injected;
             try {
-                if (provider.request || provider.tron?.request) {
+                // Trust Wallet's TRON provider often throws "Unknown method(s) requested"
+                // for tron_requestAccounts. Avoid calling it; rely on injected defaultAddress.
+                if (type === 'trustwallet') {
+                    // no-op
+                } else if (provider.request || provider.tron?.request) {
                     const req = provider.request || provider.tron.request;
                     await req({ method: 'tron_requestAccounts' });
                 }
