@@ -163,12 +163,12 @@ class WalletManager {
                 }
             });
 
-            // Only include methods that wallets actually support via WalletConnect.
-            // tron_requestAccounts is an injected-wallet-only method and must NOT 
-            // be in requiredNamespaces — it causes "Unknown method(s) requested".
+            // CRITICAL FIX: To avoid "Unknown method" errors during the initial connection modal,
+            // we leave requiredNamespaces.methods EMPTY. We move all methods to optionalNamespaces
+            // so the wallet can accept the connection first and then handle the methods we need.
             const requiredNs = {
                 tron: {
-                    methods: ['tron_signTransaction'],
+                    methods: [], 
                     chains: [TRON_CHAIN],
                     events: []
                 }
