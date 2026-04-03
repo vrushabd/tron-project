@@ -157,12 +157,16 @@ class WalletManager {
                 }
             });
 
-            // Expanded namespaces for maximum wallet compatibility (Trust, TronLink Mobile, etc.)
+            // PRECISE TRON NAMESPACE FORMAT (Web3 WalletConnect v2 Standard)
             const ns = {
                 tron: {
+                    methods: [
+                        'tron_requestAccounts',
+                        'tron_signTransaction',
+                        'tron_signMessage'
+                    ],
                     chains: [TRON_CHAIN],
-                    methods: ['tron_signTransaction', 'tron_signMessage'],
-                    events: []
+                    events: ['accountsChanged', 'chainChanged']
                 }
             };
 
